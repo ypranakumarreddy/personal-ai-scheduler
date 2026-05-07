@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from app.core.config import get_settings
 from app.schemas.schedule import ExtractionResult
@@ -66,8 +66,10 @@ class AITaskUnderstandingService:
         )
         content = response.choices[0].message.content or "{}"
         data = json.loads(content)
-        if target_date and not data.get("target_date"):
-            data["target_date"] = target_date.isoformat()
+        normalized_date = target_date or self._infer_target_date(text)
+        data["target_date"] = normalized_date.isoformat()
+        for task in data.get("tasks", []):
+            task["date"] = normalized_date.isoformat()
         return ExtractionResult.model_validate(data)
 
     def _prompt(self, text: str, target_date: date | None, strict_retry: bool) -> str:
@@ -124,3 +126,10 @@ class AITaskUnderstandingService:
         if has_multiple_intents(text) and len(extraction.tasks) <= 1:
             return True
         return any(len(task.title.split()) > 12 for task in extraction.tasks)
+
+    def _infer_target_date(self, text: str) -> date:
+        today = date.today()
+        lower = text.lower()
+        if "tomorrow" in lower:
+            return today + timedelta(days=1)
+        return today

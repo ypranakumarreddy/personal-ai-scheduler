@@ -42,3 +42,41 @@ export interface ScheduleResponse {
   validation_warnings: string[];
   calendar_sync_status: string;
 }
+
+export type AssistantIntent =
+  | "create_schedule"
+  | "ask_question"
+  | "modify_schedule"
+  | "add_task"
+  | "remove_task"
+  | "optimize_schedule"
+  | "sync_calendar";
+
+export interface AssistantChatResponse {
+  session_id: string;
+  intent: AssistantIntent;
+  assistant_message: string;
+  suggested_actions: string[];
+  schedule: ScheduleResponse | null;
+  calendar_authenticated: boolean;
+}
+
+export interface CalendarAuthStatus {
+  authenticated: boolean;
+  configured: boolean;
+  message: string;
+}
+
+export interface CalendarSyncResponse {
+  authenticated: boolean;
+  configured: boolean;
+  created_count: number;
+  failed_events: Array<{
+    title: string;
+    status: string;
+    event_link: string | null;
+    error: string | null;
+  }>;
+  event_links: string[];
+  message: string;
+}

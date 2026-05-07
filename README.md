@@ -13,6 +13,7 @@ User chats with AI
   -> LLM extracts structured tasks
   -> Backend validates and normalizes tasks
   -> Scheduling engine creates schedule
+  -> Conversation memory stores schedule context
   -> User reviews timeline and suggestions
   -> User approves
   -> Calendar sync
@@ -51,13 +52,13 @@ Expected extraction:
 
 Screenshots are stored in `docs/screenshots/`.
 
-| Dashboard | Schedule Timeline |
+| Conversational Assistant | Schedule Timeline |
 | --- | --- |
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Timeline](docs/screenshots/timeline.png) |
+| ![Conversational assistant](docs/screenshots/chat_followup.png) | ![Timeline](docs/screenshots/timeline.png) |
 
-| Conflict Detection | Suggestions Panel |
+| Schedule Modification | Calendar Sync State |
 | --- | --- |
-| ![Conflicts](docs/screenshots/conflict_detection.png) | ![Suggestions](docs/screenshots/suggestions_panel.png) |
+| ![Schedule modification](docs/screenshots/schedule_modification.png) | ![Calendar sync state](docs/screenshots/calendar_sync_state.png) |
 
 ## Features
 
@@ -65,6 +66,9 @@ Screenshots are stored in `docs/screenshots/`.
 - Friendly AI scheduling summary after generation.
 - Calendar preview with timeline, task counts, buffers, and issue counts.
 - Approval workflow with Approve Schedule, Regenerate, and Sync to Calendar actions.
+- Conversation memory for the active session.
+- Follow-up questions like `Do I have free time before bed?` or `What tasks are pending?`.
+- Schedule modification requests like `Move gym to evening` or `Add dinner at 8pm`.
 - OpenAI-powered structured task extraction through `OPENAI_API_KEY`.
 - Retry once with a stricter extraction prompt if the LLM merges multiple intents.
 - Local fallback parser for demos and missing API key handling.
@@ -76,6 +80,7 @@ Screenshots are stored in `docs/screenshots/`.
 - Automatic prep buffers for high-priority events.
 - Conflict and suggestion output.
 - Calendar sync boundary for future Google Calendar OAuth.
+- Google Calendar OAuth routes and event sync when credentials are configured.
 
 ## Architecture
 
@@ -85,8 +90,9 @@ React Chatbot Assistant
   -> LLM Structured Extraction Layer
   -> Task Validation Layer
   -> Scheduling and Optimization Engine
+  -> Conversation Memory
   -> Workflow Orchestration Layer
-  -> Storage + Calendar Integration Boundary
+  -> Google Calendar OAuth + Event Sync
 ```
 
 The key design decision is separation of concerns:
@@ -158,6 +164,28 @@ curl -X POST http://127.0.0.1:8000/api/schedules/generate \
   -d '{"text":"Tomorrow gym at 7am, office at 9am, interview at 12:30pm, parents call for 20 mins, study 2 hours."}'
 ```
 
+## Google Calendar Setup
+
+Create OAuth credentials in Google Cloud Console and add these values to `backend/.env`:
+
+```bash
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+```
+
+Add the redirect URI above to your Google OAuth client.
+
+Calendar endpoints:
+
+```text
+GET  /auth/google/login
+GET  /auth/google/callback
+POST /calendar/sync
+```
+
+If credentials are missing, the UI shows a clear `Calendar sync is not connected` setup message instead of silently failing.
+
 ## Example Prompts
 
 ```text
@@ -170,6 +198,14 @@ Plan tomorrow: wake up at 6am, deep work for 2 hours, team meeting at 11am, lunc
 
 ```text
 Move gym to evening and keep all meetings after lunch.
+```
+
+```text
+What should I do after 7:20pm?
+```
+
+```text
+Can I fit 1 hour of study?
 ```
 
 ## Recruiter Explanation

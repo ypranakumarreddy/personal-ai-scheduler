@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { generateSchedule } from "./api/schedules";
+import { getCalendarStatus, googleLoginUrl, sendAssistantMessage, syncCalendar } from "./api/schedules";
 import { SuggestionsPanel } from "./components/SuggestionsPanel";
 import { Timeline } from "./components/Timeline";
-import type { ScheduleResponse } from "./types/schedule";
+import type { CalendarAuthStatus, ScheduleResponse } from "./types/schedule";
 
 type ChatMessage = {
   id: string;
@@ -44,15 +44,30 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<"draft" | "approved" | "synced">("draft");
+  const [calendarStatus, setCalendarStatus] = useState<CalendarAuthStatus | null>(null);
+  const [suggestedActions, setSuggestedActions] = useState<string[]>(["Create a schedule", "Ask about free time"]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!didRunDemo.current && new URLSearchParams(window.location.search).get("demo") === "1") {
+    void refreshCalendarStatus();
+    const demoMode = new URLSearchParams(window.location.search).get("demo");
+    if (!didRunDemo.current && demoMode) {
       didRunDemo.current = true;
-      void submitRequest(sample);
+      void runDemo(demoMode);
     }
   }, []);
+
+  async function runDemo(mode: string) {
+    await submitRequest(sample);
+    if (mode === "followup") {
+      await submitRequest("What should I do after 7:20pm?");
+    }
+    if (mode === "modify") {
+      await submitRequest("Add dinner at 8pm.");
+    }
+  }
 
   const scheduleStats = useMemo(() => {
     const taskCount = schedule?.timeline.filter((block) => block.block_type === "task").length ?? 0;
@@ -73,18 +88,24 @@ export default function App() {
     setMessages((current) => [
       ...current,
       { id: crypto.randomUUID(), role: "user", text: trimmed },
-      { id: crypto.randomUUID(), role: "assistant", text: "I am reading the request, extracting tasks, checking constraints, and building a timeline." }
+      { id: crypto.randomUUID(), role: "assistant", text: "I am checking your schedule context and working out the best response." }
     ]);
 
     try {
-      const result = await generateSchedule(trimmed);
-      setSchedule(result);
+      const result = await sendAssistantMessage(trimmed);
+      if (result.schedule) {
+        setSchedule(result.schedule);
+        if (result.intent !== "ask_question") {
+          setApprovalStatus("draft");
+        }
+      }
+      setSuggestedActions(result.suggested_actions);
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: buildAssistantSummary(result)
+          text: result.assistant_message
         }
       ]);
     } catch (err) {
@@ -106,7 +127,7 @@ export default function App() {
 
   function handleRegenerate() {
     const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
-    void submitRequest(lastUserMessage?.text ?? sample);
+    void submitRequest(`Regenerate and optimize this schedule. ${lastUserMessage?.text ?? sample}`);
   }
 
   function handleApprove() {
@@ -119,18 +140,44 @@ export default function App() {
     }
   }
 
-  function handleSync() {
-    if (schedule) {
-      setApprovalStatus("synced");
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          text: "Calendar sync is queued in this MVP. The integration boundary is ready for Google Calendar OAuth."
-        }
-      ]);
+  async function handleSync() {
+    if (!schedule || isSyncing) {
+      return;
     }
+    if (!calendarStatus?.configured) {
+      appendAssistantMessage("Calendar sync is not connected. Add Google OAuth credentials in backend/.env, then restart the backend.");
+      return;
+    }
+    if (!calendarStatus.authenticated) {
+      window.open(googleLoginUrl(), "_blank", "noopener,noreferrer");
+      appendAssistantMessage("I opened Google Calendar connection in a new tab. After approving access, come back and press Sync to Calendar again.");
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const result = await syncCalendar();
+      if (result.created_count > 0) {
+        setApprovalStatus("synced");
+      }
+      appendAssistantMessage(result.message);
+      await refreshCalendarStatus();
+    } catch (err) {
+      appendAssistantMessage(err instanceof Error ? err.message : "Calendar sync failed.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  async function refreshCalendarStatus() {
+    try {
+      setCalendarStatus(await getCalendarStatus());
+    } catch {
+      setCalendarStatus({ authenticated: false, configured: false, message: "Calendar status unavailable." });
+    }
+  }
+
+  function appendAssistantMessage(text: string) {
+    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text }]);
   }
 
   return (
@@ -158,7 +205,7 @@ export default function App() {
               <div className="messageAvatar">
                 <Loader2 className="spin" size={16} />
               </div>
-              <p>Optimizing your day and checking for conflicts...</p>
+              <p>Thinking through your schedule context...</p>
             </article>
           )}
         </div>
@@ -169,7 +216,7 @@ export default function App() {
             id="chatInput"
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Plan my tomorrow with..."
+            placeholder="Ask a follow-up, add a task, or plan a new day..."
           />
           <div className="composerActions">
             <button className="secondaryButton" type="button" onClick={() => setInput(sample)}>
@@ -178,8 +225,15 @@ export default function App() {
             </button>
             <button type="submit" disabled={isLoading}>
               {isLoading ? <Loader2 className="spin" size={16} /> : <Send size={16} />}
-              Generate Schedule
+              Send
             </button>
+          </div>
+          <div className="suggestedActions">
+            {suggestedActions.map((action) => (
+              <button className="chipButton" type="button" key={action} onClick={() => setInput(action)}>
+                {action}
+              </button>
+            ))}
           </div>
           {error && <p className="error">{error}</p>}
         </form>
@@ -219,11 +273,12 @@ export default function App() {
             <RefreshCw size={16} />
             Regenerate
           </button>
-          <button type="button" disabled={!schedule || approvalStatus === "draft"} onClick={handleSync}>
+          <button type="button" disabled={!schedule || isSyncing} onClick={handleSync}>
             <CalendarCheck size={16} />
-            Sync to Calendar
+            {isSyncing ? "Syncing" : calendarStatus?.authenticated ? "Sync to Calendar" : "Connect Google Calendar"}
           </button>
         </div>
+        <p className="calendarStatus">{calendarStatus?.message ?? "Checking Google Calendar connection..."}</p>
 
         <SuggestionsPanel
           conflicts={schedule?.conflicts ?? []}
@@ -233,17 +288,6 @@ export default function App() {
       </section>
     </main>
   );
-}
-
-function buildAssistantSummary(schedule: ScheduleResponse) {
-  const tasks = schedule.timeline.filter((block) => block.block_type === "task");
-  const conflicts = schedule.conflicts.length;
-  const warnings = schedule.validation_warnings.length;
-  const extractedTitles = schedule.extracted_tasks.map((task) => task.title).slice(0, 6).join(", ");
-  const firstTask = tasks[0]?.title ?? "your first task";
-  const lastTask = tasks[tasks.length - 1]?.title ?? "your final task";
-
-  return `I found ${schedule.extracted_tasks.length} tasks (${extractedTitles}) and created a draft schedule for ${schedule.target_date}. The timeline starts with ${firstTask} and ends with ${lastTask}. I found ${conflicts} conflict${conflicts === 1 ? "" : "s"} and ${warnings} validation warning${warnings === 1 ? "" : "s"} for review before calendar sync.`;
 }
 
 function StatusPill({ status }: { status: "draft" | "approved" | "synced" }) {

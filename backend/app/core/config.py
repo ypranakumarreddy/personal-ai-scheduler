@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     enable_calendar_sync: bool = False
     default_timezone: str = "America/Chicago"
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -18,4 +21,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

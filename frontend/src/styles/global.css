@@ -192,6 +192,23 @@ textarea:focus {
   margin-top: 12px;
 }
 
+.suggestedActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chipButton {
+  background: #f2f6ee;
+  border-color: #cad6c2;
+  color: #40503f;
+  font-size: 13px;
+  min-height: 34px;
+  padding: 0 11px;
+  width: auto;
+}
+
 .secondaryButton {
   background: #ffffff;
   border-color: #bcc8b6;
@@ -311,6 +328,12 @@ textarea:focus {
   justify-content: flex-start;
   margin: 0;
   padding: 0 18px;
+}
+
+.calendarStatus {
+  color: #647064;
+  font-size: 13px;
+  margin: -6px 18px 0;
 }
 
 .sidePanel {

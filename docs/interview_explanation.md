@@ -6,14 +6,16 @@ Personal AI Scheduling Assistant is an AI workflow automation app, not just a ca
 
 ## 5-10 Minute Technical Version
 
-The system is split into six layers.
+The system is split into eight layers.
 
 1. React dashboard: users enter natural language and review the generated timeline, conflicts, and AI suggestions.
 2. FastAPI backend: exposes typed endpoints and coordinates the scheduling workflow.
-3. AI task understanding: uses OpenAI structured extraction through `OPENAI_API_KEY`, retries once with a stricter prompt if the LLM merges tasks, and falls back to a local parser when needed.
-4. Validation layer: checks missing durations, invalid fixed tasks, overlaps, and impossible time windows.
-5. Scheduling engine: locks fixed tasks first, ranks flexible tasks by priority and duration, finds available windows, adds prep buffers, and emits conflict-resolution suggestions.
-6. Calendar boundary: returns sync status today and is structured for Google Calendar OAuth event create/update/delete later.
+3. Intent detection: routes messages into create schedule, ask question, modify schedule, add/remove task, optimize, or sync calendar.
+4. Conversation memory: stores the latest schedule, extracted tasks, free slots, conflicts, warnings, and preferences for the active session.
+5. AI task understanding: uses OpenAI structured extraction through `OPENAI_API_KEY`, retries once with a stricter prompt if the LLM merges tasks, and falls back to a local parser when needed.
+6. Validation layer: checks missing durations, invalid fixed tasks, overlaps, and impossible time windows.
+7. Scheduling engine: locks fixed tasks first, ranks flexible tasks by priority and duration, finds available windows, adds prep buffers, and emits conflict-resolution suggestions.
+8. Calendar sync: supports Google OAuth routes and creates calendar events when credentials are configured.
 
 The key architectural point is separation of concerns. LLM output is treated as an untrusted task candidate, then validated and scheduled by normal backend code. That prevents hallucinated times or malformed tasks from becoming calendar events without checks.
 
