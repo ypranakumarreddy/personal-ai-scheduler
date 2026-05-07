@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">Personal AI Scheduling Assistant Architecture</title>
+  <desc id="desc">System architecture from React frontend through FastAPI, AI task understanding, validation, scheduling, orchestration, storage, and calendar sync.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#26342a"/>
+    </marker>
+    <style>
+      .bg { fill: #f6f7f2; }
+      .title { fill: #152019; font: 800 38px Arial, sans-serif; }
+      .subtitle { fill: #667066; font: 500 18px Arial, sans-serif; }
+      .box { fill: #ffffff; stroke: #cfd7ca; stroke-width: 2; }
+      .boxDark { fill: #202820; stroke: #202820; stroke-width: 2; }
+      .label { fill: #152019; font: 800 20px Arial, sans-serif; }
+      .labelDark { fill: #ffffff; font: 800 20px Arial, sans-serif; }
+      .body { fill: #667066; font: 500 15px Arial, sans-serif; }
+      .bodyDark { fill: #d7dfd2; font: 500 15px Arial, sans-serif; }
+      .chip { fill: #c7f36a; }
+      .chipText { fill: #152019; font: 800 13px Arial, sans-serif; }
+      .arrow { stroke: #26342a; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1400" height="760"/>
+  <text class="title" x="70" y="82">Personal AI Scheduling Assistant</text>
+  <text class="subtitle" x="70" y="116">LLM extraction plus deterministic scheduling, workflow orchestration, and calendar-ready sync boundaries.</text>
+
+  <rect class="box" x="70" y="180" width="250" height="130" rx="10"/>
+  <text class="label" x="98" y="220">React Dashboard</text>
+  <text class="body" x="98" y="252">Natural language input</text>
+  <text class="body" x="98" y="278">Timeline and suggestions</text>
+
+  <rect class="box" x="400" y="180" width="250" height="130" rx="10"/>
+  <text class="label" x="428" y="220">FastAPI Backend</text>
+  <text class="body" x="428" y="252">Typed REST endpoints</text>
+  <text class="body" x="428" y="278">CORS and validation</text>
+
+  <rect class="box" x="730" y="180" width="250" height="130" rx="10"/>
+  <text class="label" x="758" y="220">AI Understanding</text>
+  <text class="body" x="758" y="252">Structured task JSON</text>
+  <text class="body" x="758" y="278">Fallback parser</text>
+
+  <rect class="boxDark" x="1060" y="180" width="270" height="130" rx="10"/>
+  <text class="labelDark" x="1088" y="220">Scheduling Engine</text>
+  <text class="bodyDark" x="1088" y="252">Fixed task locking</text>
+  <text class="bodyDark" x="1088" y="278">Flexible optimization</text>
+
+  <path class="arrow" d="M320 245 H392"/>
+  <path class="arrow" d="M650 245 H722"/>
+  <path class="arrow" d="M980 245 H1052"/>
+
+  <rect class="box" x="190" y="430" width="270" height="135" rx="10"/>
+  <text class="label" x="218" y="470">Validation Layer</text>
+  <text class="body" x="218" y="502">Missing durations</text>
+  <text class="body" x="218" y="528">Overlaps and impossible plans</text>
+
+  <rect class="boxDark" x="565" y="430" width="270" height="135" rx="10"/>
+  <text class="labelDark" x="593" y="470">Orchestration</text>
+  <text class="bodyDark" x="593" y="502">Generate, update, retry</text>
+  <text class="bodyDark" x="593" y="528">Sync workflow boundary</text>
+
+  <rect class="box" x="940" y="430" width="270" height="135" rx="10"/>
+  <text class="label" x="968" y="470">Storage + Calendar</text>
+  <text class="body" x="968" y="502">Schedule persistence</text>
+  <text class="body" x="968" y="528">Google Calendar OAuth later</text>
+
+  <path class="arrow" d="M1195 310 C1195 380 1075 380 1075 422"/>
+  <path class="arrow" d="M1060 500 H843"/>
+  <path class="arrow" d="M565 500 H468"/>
+  <path class="arrow" d="M325 430 C325 365 855 365 855 318"/>
+  <path class="arrow" d="M835 500 H932"/>
+
+  <rect class="chip" x="70" y="650" width="192" height="38" rx="19"/>
+  <text class="chipText" x="94" y="674">Production-minded MVP</text>
+  <text class="subtitle" x="288" y="675">The LLM understands intent; the scheduler owns correctness, conflicts, buffers, and optimization.</text>
+</svg>
+

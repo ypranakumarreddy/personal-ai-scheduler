@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.env
+scheduler.db
+schedule_store.json
+
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
