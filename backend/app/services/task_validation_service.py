@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from app.schemas.schedule import ExtractionResult, TaskCandidate, TaskType
 
@@ -9,6 +9,7 @@ class TaskValidationService:
         conflicts: list[str] = []
 
         for task in extraction.tasks:
+            self._normalize_task(task)
             if not task.duration_minutes or task.duration_minutes <= 0:
                 task.duration_minutes = self._default_duration(task)
                 warnings.append(f"Duration missing for '{task.title}', defaulted to {task.duration_minutes} minutes.")
@@ -16,7 +17,7 @@ class TaskValidationService:
                 warnings.append(f"Fixed task '{task.title}' is missing a start time.")
             if task.task_type == TaskType.deadline and not (task.start_time or task.end_time or task.latest_end):
                 warnings.append(f"Deadline task '{task.title}' is missing a deadline time.")
-            if bool(task.earliest_start) != bool(task.latest_end):
+            if task.task_type != TaskType.deadline and bool(task.earliest_start) != bool(task.latest_end):
                 warnings.append(f"Task '{task.title}' has an incomplete time window.")
             if task.earliest_start and task.latest_end and task.earliest_start >= task.latest_end:
                 warnings.append(f"Task '{task.title}' has an invalid time window.")
@@ -43,6 +44,25 @@ class TaskValidationService:
 
     def _effective_start_time(self, task: TaskCandidate):
         return task.start_time or task.end_time or task.latest_end
+
+    def _normalize_task(self, task: TaskCandidate) -> None:
+        title = task.title.lower()
+        if task.task_type == TaskType.fixed and not task.start_time:
+            task.task_type = TaskType.flexible
+        if task.task_type == TaskType.deadline and not task.latest_end:
+            task.latest_end = task.end_time or task.start_time
+        if "parents" in title and not task.earliest_start and not task.latest_end:
+            task.earliest_start = time(19, 0)
+            task.latest_end = time(21, 30)
+        if "walk" in title and not task.earliest_start and not task.latest_end:
+            task.earliest_start = time(17, 0)
+            task.latest_end = time(21, 0)
+        if "gym" in title and "energy" not in task.tags:
+            task.tags.append("energy")
+        if "walk" in title and "energy" not in task.tags:
+            task.tags.append("energy")
+        if any(word in title for word in ("interview", "meeting", "call", "parents")) and "meeting" not in task.tags:
+            task.tags.append("meeting")
 
     def _default_duration(self, task: TaskCandidate) -> int:
         lower = task.title.lower()

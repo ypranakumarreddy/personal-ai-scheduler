@@ -22,7 +22,7 @@ TASK_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bwake(?:\s+up)?\b", "Wake Up"),
     (r"\binterview\b", "Interview"),
     (r"\boffice\b", "Office"),
-    (r"\b(?:gym|workout)\b", "Gym"),
+    (r"\b(?:gym|workout|gy)\b", "Gym"),
     (r"\b(?:parents?\s+call|call\s+(?:my\s+)?parents?|talk\s+(?:to|with)\s+(?:my\s+)?parents?)\b", "Parents Call"),
     (r"\b(?:go\s+for\s+a\s+walk|walk)\b", "Walk"),
     (r"\b(?:study|deep\s+work)\b", "Study"),
@@ -176,12 +176,15 @@ def _clean_chunk(chunk: str) -> str:
 
 def _extract_time(chunk: str) -> time | None:
     lower = chunk.lower()
-    if "between" in lower or re.search(r"\bfrom\b.+\b(to|-)\b", lower):
-        return None
     if not any(marker in lower for marker in (" at ", " by ", "wake", "sleep", "interview", "meeting", "office")):
         return None
 
-    for match in re.finditer(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", chunk, re.IGNORECASE):
+    exact_match = re.search(r"\b(?:at|by)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", chunk, re.IGNORECASE)
+    matches = [exact_match] if exact_match else list(re.finditer(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", chunk, re.IGNORECASE))
+
+    for match in matches:
+        if not match:
+            continue
         suffix = chunk[match.end() : match.end() + 8].lower()
         if re.match(r"\s*(h|hr|hrs|hour|hours|min|mins|minute|minutes)\b", suffix):
             continue

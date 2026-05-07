@@ -73,6 +73,8 @@ class SchedulingEngine:
 
     def _prep_buffer_minutes(self, task: TaskCandidate) -> int:
         title = task.title.lower()
+        if any(word in title for word in ("sleep", "wake")):
+            return 0
         if task.priority == Priority.high or "interview" in title:
             return 15
         if "meeting" in title:
