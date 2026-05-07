@@ -1,10 +1,28 @@
 # Personal AI Scheduling Assistant
 
-An AI-powered scheduling workflow system that turns natural language plans into structured tasks, validates constraints, detects conflicts, and generates a calendar-ready daily timeline.
+An AI-powered scheduling workflow system with a company-style chatbot interface. Users chat with an AI assistant, the backend extracts structured tasks, validates constraints, detects conflicts, and generates a calendar-ready daily timeline.
 
 This is intentionally more than a calendar chatbot: the LLM understands the request, but deterministic backend logic owns scheduling correctness.
 
 ![Architecture](docs/architecture.svg)
+
+## Product Flow
+
+```text
+User chats with AI
+  -> AI understands tasks
+  -> System creates schedule
+  -> User reviews timeline and suggestions
+  -> User approves
+  -> Calendar sync
+```
+
+The frontend is designed like an internal SaaS AI assistant:
+
+- Left side: chatbot conversation with user and AI messages.
+- Right side: generated timeline/calendar preview.
+- Review area: conflicts, suggested fixes, and validation warnings.
+- Workflow actions: Generate Schedule, Approve Schedule, Regenerate, Sync to Calendar.
 
 ## Demo Workflow
 
@@ -40,7 +58,10 @@ Screenshots are stored in `docs/screenshots/`.
 
 ## Features
 
-- Natural language schedule input.
+- Chat-first natural language planning interface.
+- Friendly AI scheduling summary after generation.
+- Calendar preview with timeline, task counts, buffers, and issue counts.
+- Approval workflow with Approve Schedule, Regenerate, and Sync to Calendar actions.
 - OpenAI-compatible structured task extraction.
 - Local fallback parser for demos without API keys.
 - Task validation for missing durations, overlaps, and impossible fixed-time plans.
@@ -49,12 +70,11 @@ Screenshots are stored in `docs/screenshots/`.
 - Automatic prep buffers for high-priority events.
 - Conflict and suggestion output.
 - Calendar sync boundary for future Google Calendar OAuth.
-- React dashboard with timeline and suggestions panel.
 
 ## Architecture
 
 ```text
-React Dashboard
+React Chatbot Assistant
   -> FastAPI Backend
   -> AI Task Understanding Layer
   -> Task Validation Layer
@@ -159,4 +179,3 @@ Deep technical version:
 - Email, SMS, and push reminders.
 - Background sync retries and failure logging.
 - Evaluation set for LLM extraction quality.
-
