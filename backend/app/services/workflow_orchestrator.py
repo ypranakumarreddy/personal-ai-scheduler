@@ -1,4 +1,5 @@
 from uuid import uuid4
+import logging
 
 from app.core.config import get_settings
 from app.schemas.schedule import ScheduleRequest, ScheduleResponse
@@ -7,6 +8,8 @@ from app.services.calendar_sync_service import CalendarSyncService
 from app.services.scheduling_engine import SchedulingEngine
 from app.services.storage_service import ScheduleStorageService
 from app.services.task_validation_service import TaskValidationService
+
+logger = logging.getLogger(__name__)
 
 
 class ScheduleWorkflowOrchestrator:
@@ -21,6 +24,13 @@ class ScheduleWorkflowOrchestrator:
     async def generate(self, request: ScheduleRequest) -> ScheduleResponse:
         timezone = request.timezone or self.settings.default_timezone
         extraction = await self.ai.extract(request.text, request.target_date)
+        logger.info(
+            "extracted_tasks_before_scheduling",
+            extra={
+                "task_count": len(extraction.tasks),
+                "tasks": [task.model_dump(mode="json") for task in extraction.tasks],
+            },
+        )
         warnings, validation_conflicts = self.validator.validate(extraction)
         timeline, scheduling_conflicts, suggestions = self.scheduler.build_schedule(extraction)
         sync_status = await self.calendar.sync(timeline)
@@ -41,4 +51,3 @@ class ScheduleWorkflowOrchestrator:
 
     def get_schedule(self, schedule_id: str) -> ScheduleResponse | None:
         return self.storage.get(schedule_id)
-

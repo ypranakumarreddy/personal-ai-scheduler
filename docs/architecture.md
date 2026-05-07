@@ -5,9 +5,9 @@
 ## Flow
 
 ```text
-React Dashboard
+React Chatbot Assistant
   -> FastAPI Backend
-  -> AI Task Understanding Layer
+  -> LLM Structured Extraction Layer
   -> Task Validation Layer
   -> Scheduling and Optimization Engine
   -> Workflow Orchestration Layer
@@ -25,7 +25,7 @@ React Dashboard
 
 ## Why LLM + Algorithm
 
-The LLM is useful for language understanding, but the project does not trust the LLM to decide the final calendar. Extracted tasks move through validation and deterministic scheduling before anything is considered calendar-ready.
+The LLM is useful for language understanding, but the project does not trust the LLM to decide the final calendar. OpenAI extracts structured task candidates; those candidates move through validation, normalization, and deterministic scheduling before anything is considered calendar-ready.
 
 This makes the system safer and easier to explain:
 

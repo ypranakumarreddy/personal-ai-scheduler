@@ -1,4 +1,5 @@
-from datetime import date, datetime, time
+from datetime import date as Date
+from datetime import datetime, time
 from enum import Enum
 from uuid import uuid4
 
@@ -8,7 +9,8 @@ from pydantic import BaseModel, Field
 class TaskType(str, Enum):
     fixed = "fixed"
     flexible = "flexible"
-    recurring = "recurring"
+    deadline = "deadline"
+    routine = "routine"
     optional = "optional"
 
 
@@ -28,24 +30,30 @@ class TaskStatus(str, Enum):
 class ScheduleRequest(BaseModel):
     text: str = Field(min_length=3)
     timezone: str | None = None
-    target_date: date | None = None
+    target_date: Date | None = None
 
 
 class TaskCandidate(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     title: str
+    date: Date | None = None
     task_type: TaskType = TaskType.flexible
     start_time: time | None = None
+    end_time: time | None = None
+    earliest_start: time | None = None
+    latest_end: time | None = None
     duration_minutes: int | None = None
     priority: Priority = Priority.medium
     status: TaskStatus = TaskStatus.pending
+    constraints: list[str] = Field(default_factory=list)
     notes: str | None = None
+    confidence_score: float = Field(default=0.75, ge=0, le=1)
     depends_on: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
 
 
 class ExtractionResult(BaseModel):
-    target_date: date
+    target_date: Date
     wake_time: time | None = None
     sleep_time: time | None = None
     tasks: list[TaskCandidate]
@@ -68,7 +76,7 @@ class ScheduledBlock(BaseModel):
 
 class ScheduleResponse(BaseModel):
     schedule_id: str
-    target_date: date
+    target_date: Date
     timezone: str
     extracted_tasks: list[TaskCandidate]
     timeline: list[ScheduledBlock]
@@ -84,4 +92,3 @@ class TaskUpdateRequest(BaseModel):
     duration_minutes: int | None = Field(default=None, gt=0)
     task_type: TaskType | None = None
     priority: Priority | None = None
-

@@ -1,8 +1,8 @@
 # Personal AI Scheduling Assistant
 
-An AI-powered scheduling workflow system with a company-style chatbot interface. Users chat with an AI assistant, the backend extracts structured tasks, validates constraints, detects conflicts, and generates a calendar-ready daily timeline.
+An AI-powered scheduling workflow system with a company-style chatbot interface. Users chat with an AI assistant, an LLM extracts structured task candidates, the backend validates them, and a deterministic scheduling engine generates a calendar-ready daily timeline.
 
-This is intentionally more than a calendar chatbot: the LLM understands the request, but deterministic backend logic owns scheduling correctness.
+This is intentionally more than a calendar chatbot: the LLM does structured extraction, but backend validation and scheduling code own correctness.
 
 ![Architecture](docs/architecture.svg)
 
@@ -10,8 +10,9 @@ This is intentionally more than a calendar chatbot: the LLM understands the requ
 
 ```text
 User chats with AI
-  -> AI understands tasks
-  -> System creates schedule
+  -> LLM extracts structured tasks
+  -> Backend validates and normalizes tasks
+  -> Scheduling engine creates schedule
   -> User reviews timeline and suggestions
   -> User approves
   -> Calendar sync
@@ -29,20 +30,22 @@ The frontend is designed like an internal SaaS AI assistant:
 Input:
 
 ```text
-Tomorrow wake up at 6am, gym at 7am, office at 9am, interview at 12:30pm,
-parents call for 20 mins, study 2 hours, sleep by 10:30pm.
+hey i want to wake up at 8am tomorrow morning i have a interview at 1pm
+i want to go to gym between 10am - 12pm i also want to talk with my parents
+atleast 20min i want to go to walk for 1hr at evening also main important
+i want to go to bed by 10:30pm
 ```
 
-System:
+Expected extraction:
 
-1. Extracts structured tasks from natural language.
-2. Classifies fixed tasks versus flexible tasks.
-3. Validates missing durations and overlapping time windows.
-4. Locks fixed tasks first.
-5. Adds prep buffers around high-priority events.
-6. Places flexible tasks into open time slots.
-7. Detects conflicts such as Office overlapping the Interview.
-8. Returns a timeline, warnings, suggestions, and calendar sync status.
+| Task | Type | Constraint |
+| --- | --- | --- |
+| Wake Up | Fixed | 8:00 AM |
+| Gym | Flexible | between 10:00 AM and 12:00 PM |
+| Interview | Fixed | 1:00 PM |
+| Parents Call | Flexible | 20 minutes |
+| Walk | Flexible | evening, 60 minutes |
+| Sleep | Deadline | by 10:30 PM |
 
 ## Screenshots
 
@@ -62,10 +65,13 @@ Screenshots are stored in `docs/screenshots/`.
 - Friendly AI scheduling summary after generation.
 - Calendar preview with timeline, task counts, buffers, and issue counts.
 - Approval workflow with Approve Schedule, Regenerate, and Sync to Calendar actions.
-- OpenAI-compatible structured task extraction.
-- Local fallback parser for demos without API keys.
+- OpenAI-powered structured task extraction through `OPENAI_API_KEY`.
+- Retry once with a stricter extraction prompt if the LLM merges multiple intents.
+- Local fallback parser for demos and missing API key handling.
 - Task validation for missing durations, overlaps, and impossible fixed-time plans.
 - Algorithmic scheduling engine for fixed and flexible tasks.
+- Time-window support for constraints like `between 10am and 12pm`.
+- Deadline support for constraints like `sleep by 10:30pm`.
 - Priority-based flexible task placement.
 - Automatic prep buffers for high-priority events.
 - Conflict and suggestion output.
@@ -76,7 +82,7 @@ Screenshots are stored in `docs/screenshots/`.
 ```text
 React Chatbot Assistant
   -> FastAPI Backend
-  -> AI Task Understanding Layer
+  -> LLM Structured Extraction Layer
   -> Task Validation Layer
   -> Scheduling and Optimization Engine
   -> Workflow Orchestration Layer
@@ -109,6 +115,14 @@ pip install -r requirements.txt
 cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
+
+Set your OpenAI key locally in `backend/.env`:
+
+```bash
+OPENAI_API_KEY=your_real_key_here
+```
+
+Never commit `.env`. It is already ignored by `.gitignore`.
 
 Health check:
 
@@ -147,7 +161,7 @@ curl -X POST http://127.0.0.1:8000/api/schedules/generate \
 ## Example Prompts
 
 ```text
-Tomorrow gym at 7am, office at 9am, interview at 12:30pm, parents call for 20 mins.
+hey i want to wake up at 8am tomorrow morning i have a interview at 1pm i want to go to gym between 10am - 12pm i also want to talk with my parents atleast 20min i want to go to walk for 1hr at evening also main important i want to go to bed by 10:30pm
 ```
 
 ```text

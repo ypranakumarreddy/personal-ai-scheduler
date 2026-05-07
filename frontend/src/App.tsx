@@ -23,7 +23,7 @@ type ChatMessage = {
 };
 
 const sample =
-  "Plan my tomorrow: wake up at 6am, gym at 7am, office at 9am, interview at 12:30pm, parents call for 20 mins, study 2 hours, sleep by 10:30pm.";
+  "hey i want to wake up at 8am tomorrow morning i have a interview at 1pm i want to go to gym between 10am - 12pm i also want to talk with my parents atleast 20min i want to go to walk for 1hr at evening also main important i want to go to bed by 10:30pm";
 
 const initialMessages: ChatMessage[] = [
   {
@@ -34,7 +34,7 @@ const initialMessages: ChatMessage[] = [
   {
     id: "example",
     role: "assistant",
-    text: "Try: Plan my tomorrow with gym at 7am, office at 9am, interview at 12:30pm, study for 2 hours, and sleep by 10:30pm."
+    text: "Try a messy request like: wake up at 8am, interview at 1pm, gym between 10am and 12pm, parents call for 20 minutes, walk for 1 hour in the evening, and bed by 10:30pm."
   }
 ];
 
@@ -197,7 +197,15 @@ export default function App() {
         <div className="metricsGrid">
           <Metric icon={<CalendarCheck size={17} />} label="Tasks" value={String(scheduleStats.taskCount)} />
           <Metric icon={<Clock3 size={17} />} label="Buffers" value={String(scheduleStats.bufferCount)} />
-          <Metric icon={<Wand2 size={17} />} label="Issues" value={String((schedule?.conflicts.length ?? 0) + (schedule?.suggestions.length ?? 0))} />
+          <Metric
+            icon={<Wand2 size={17} />}
+            label="Issues"
+            value={String(
+              (schedule?.conflicts.length ?? 0) +
+                (schedule?.suggestions.length ?? 0) +
+                (schedule?.validation_warnings.length ?? 0)
+            )}
+          />
         </div>
 
         <Timeline blocks={schedule?.timeline ?? []} />
@@ -231,10 +239,11 @@ function buildAssistantSummary(schedule: ScheduleResponse) {
   const tasks = schedule.timeline.filter((block) => block.block_type === "task");
   const conflicts = schedule.conflicts.length;
   const warnings = schedule.validation_warnings.length;
+  const extractedTitles = schedule.extracted_tasks.map((task) => task.title).slice(0, 6).join(", ");
   const firstTask = tasks[0]?.title ?? "your first task";
   const lastTask = tasks[tasks.length - 1]?.title ?? "your final task";
 
-  return `I created a draft schedule for ${schedule.target_date} with ${tasks.length} tasks, starting with ${firstTask} and ending with ${lastTask}. I found ${conflicts} conflict${conflicts === 1 ? "" : "s"} and ${warnings} validation warning${warnings === 1 ? "" : "s"} for review before calendar sync.`;
+  return `I found ${schedule.extracted_tasks.length} tasks (${extractedTitles}) and created a draft schedule for ${schedule.target_date}. The timeline starts with ${firstTask} and ends with ${lastTask}. I found ${conflicts} conflict${conflicts === 1 ? "" : "s"} and ${warnings} validation warning${warnings === 1 ? "" : "s"} for review before calendar sync.`;
 }
 
 function StatusPill({ status }: { status: "draft" | "approved" | "synced" }) {

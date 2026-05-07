@@ -6,16 +6,23 @@ from app.schemas.schedule import ExtractionResult, Priority, ScheduledBlock, Tas
 class SchedulingEngine:
     def build_schedule(self, extraction: ExtractionResult) -> tuple[list[ScheduledBlock], list[str], list[str]]:
         day_start = datetime.combine(extraction.target_date, extraction.wake_time or time(6, 0))
-        day_end = datetime.combine(extraction.target_date, extraction.sleep_time or time(22, 30))
+        base_day_end = extraction.sleep_time or time(22, 30)
+        day_end = datetime.combine(extraction.target_date, base_day_end)
+        if extraction.sleep_time:
+            day_end += timedelta(minutes=15)
         timeline: list[ScheduledBlock] = []
         conflicts: list[str] = []
         suggestions: list[str] = []
 
-        fixed_tasks = [task for task in extraction.tasks if task.task_type == TaskType.fixed and task.start_time]
+        fixed_tasks = [
+            task
+            for task in extraction.tasks
+            if task.task_type in (TaskType.fixed, TaskType.deadline) and self._effective_start_time(task)
+        ]
         flexible_tasks = [task for task in extraction.tasks if task not in fixed_tasks]
 
         for task in fixed_tasks:
-            start = datetime.combine(extraction.target_date, task.start_time)
+            start = datetime.combine(extraction.target_date, self._effective_start_time(task))
             end = start + timedelta(minutes=task.duration_minutes or 45)
             prep = self._prep_buffer_minutes(task)
             if prep:
@@ -61,6 +68,9 @@ class SchedulingEngine:
             status=TaskStatus.scheduled,
         )
 
+    def _effective_start_time(self, task: TaskCandidate):
+        return task.start_time or task.end_time or task.latest_end
+
     def _prep_buffer_minutes(self, task: TaskCandidate) -> int:
         title = task.title.lower()
         if task.priority == Priority.high or "interview" in title:
@@ -82,6 +92,7 @@ class SchedulingEngine:
     ) -> ScheduledBlock | None:
         duration = timedelta(minutes=task.duration_minutes or 45)
         windows = self._available_windows(timeline, day_start, day_end)
+        windows = self._constrain_windows(task, windows)
         preferred_windows = self._prefer_windows(task, windows)
 
         for start, end in preferred_windows:
@@ -117,8 +128,30 @@ class SchedulingEngine:
         if "meeting" in task.tags:
             return sorted(windows, key=lambda window: abs(window[0].hour - 14))
         if "energy" in task.tags:
+            if task.title.lower() == "gym":
+                return sorted(windows, key=lambda window: abs(window[0].hour - 10))
+            if task.title.lower() == "walk":
+                return sorted(windows, key=lambda window: abs(window[0].hour - 18))
             return sorted(windows, key=lambda window: abs(window[0].hour - 18))
         return windows
+
+    def _constrain_windows(
+        self,
+        task: TaskCandidate,
+        windows: list[tuple[datetime, datetime]],
+    ) -> list[tuple[datetime, datetime]]:
+        if not task.earliest_start and not task.latest_end:
+            return windows
+
+        constrained: list[tuple[datetime, datetime]] = []
+        for start, end in windows:
+            window_start = datetime.combine(start.date(), task.earliest_start) if task.earliest_start else start
+            window_end = datetime.combine(end.date(), task.latest_end) if task.latest_end else end
+            overlap_start = max(start, window_start)
+            overlap_end = min(end, window_end)
+            if overlap_start < overlap_end:
+                constrained.append((overlap_start, overlap_end))
+        return constrained
 
     def _detect_block_conflicts(self, timeline: list[ScheduledBlock]) -> list[str]:
         conflicts = []
@@ -132,4 +165,3 @@ class SchedulingEngine:
             if current.end == nxt.start and current.block_type == "task" and nxt.block_type == "task":
                 return True
         return False
-
