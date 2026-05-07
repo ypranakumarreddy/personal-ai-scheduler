@@ -1,12 +1,20 @@
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
-from uuid import uuid4
+from typing import TypedDict
 
 from dateutil.parser import parse
+from langgraph.graph import END, StateGraph
+from openai import AsyncOpenAI
 
+from app.core.config import get_settings
 from app.schemas.assistant import AssistantChatRequest, AssistantChatResponse, AssistantIntent
 from app.schemas.schedule import ScheduleRequest, ScheduleResponse, ScheduledBlock
+from app.services.conversation_memory_service import ConversationMemoryService
 from app.services.workflow_orchestrator import ScheduleWorkflowOrchestrator
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -24,33 +32,34 @@ class AssistantSessionState:
     user_preferences: dict[str, str] = field(default_factory=dict)
 
 
+class AssistantGraphState(TypedDict, total=False):
+    request: AssistantChatRequest
+    message: str
+    session: AssistantSessionState
+    intent: AssistantIntent
+    response: AssistantChatResponse
+
+
 class AssistantConversationService:
-    def __init__(self, orchestrator: ScheduleWorkflowOrchestrator | None = None) -> None:
+    def __init__(
+        self,
+        orchestrator: ScheduleWorkflowOrchestrator | None = None,
+        memory: ConversationMemoryService | None = None,
+    ) -> None:
         self.orchestrator = orchestrator or ScheduleWorkflowOrchestrator()
+        self.settings = get_settings()
+        self.memory = memory or ConversationMemoryService()
         self.sessions: dict[str, AssistantSessionState] = {}
+        self.graph = self._build_graph()
 
     async def chat(self, request: AssistantChatRequest) -> AssistantChatResponse:
-        state = self._state(request.session_id)
-        message = request.message.strip()
-        intent = self._detect_intent(message, state)
-        state.turns.append(ConversationTurn(role="user", content=message))
-
-        if intent == "create_schedule":
-            response = await self._create_schedule(state, message, request.timezone)
-        elif intent in {"modify_schedule", "add_task", "remove_task", "optimize_schedule"}:
-            response = await self._modify_schedule(state, message, intent, request.timezone)
-        elif intent == "sync_calendar":
-            response = self._simple_response(
-                state,
-                intent,
-                "I can sync the current timeline once Google Calendar is connected. Use the calendar button on the right to connect or sync.",
-                ["Connect Google Calendar", "Sync to Calendar"],
-            )
-        else:
-            response = self._answer_question(state, message)
-
-        state.turns.append(ConversationTurn(role="assistant", content=response.assistant_message))
-        return response
+        result = await self.graph.ainvoke(
+            {
+                "request": request,
+                "message": request.message.strip(),
+            }
+        )
+        return result["response"]
 
     def get_state(self, session_id: str = "default") -> AssistantSessionState:
         return self._state(session_id)
@@ -60,10 +69,165 @@ class AssistantConversationService:
 
     def _state(self, session_id: str) -> AssistantSessionState:
         if session_id not in self.sessions:
-            self.sessions[session_id] = AssistantSessionState(session_id=session_id)
+            persisted = self.memory.load_session(session_id)
+            turns = [
+                ConversationTurn(role=turn["role"], content=turn["content"])
+                for turn in self.memory.load_turns(session_id)
+            ]
+            self.sessions[session_id] = AssistantSessionState(
+                session_id=session_id,
+                turns=turns,
+                latest_plan_text=persisted["latest_plan_text"] if persisted else None,
+                latest_schedule=persisted["latest_schedule"] if persisted else None,
+                user_preferences=persisted["user_preferences"] if persisted else {},
+            )
         return self.sessions[session_id]
 
-    def _detect_intent(self, message: str, state: AssistantSessionState) -> AssistantIntent:
+    def _build_graph(self):
+        graph = StateGraph(AssistantGraphState)
+        graph.add_node("load_memory", self._load_memory_node)
+        graph.add_node("classify_intent", self._classify_intent_node)
+        graph.add_node("create_schedule", self._create_schedule_node)
+        graph.add_node("modify_schedule", self._modify_schedule_node)
+        graph.add_node("answer_question", self._answer_question_node)
+        graph.add_node("sync_calendar", self._sync_calendar_node)
+        graph.add_node("persist_memory", self._persist_memory_node)
+
+        graph.set_entry_point("load_memory")
+        graph.add_edge("load_memory", "classify_intent")
+        graph.add_conditional_edges(
+            "classify_intent",
+            self._route_intent,
+            {
+                "create_schedule": "create_schedule",
+                "modify_schedule": "modify_schedule",
+                "answer_question": "answer_question",
+                "sync_calendar": "sync_calendar",
+            },
+        )
+        graph.add_edge("create_schedule", "persist_memory")
+        graph.add_edge("modify_schedule", "persist_memory")
+        graph.add_edge("answer_question", "persist_memory")
+        graph.add_edge("sync_calendar", "persist_memory")
+        graph.add_edge("persist_memory", END)
+        return graph.compile()
+
+    async def _load_memory_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        request = graph_state["request"]
+        session = self._state(request.session_id)
+        message = graph_state["message"]
+        session.turns.append(ConversationTurn(role="user", content=message))
+        self.memory.append_turn(session.session_id, "user", message)
+        return {"session": session}
+
+    async def _classify_intent_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        session = graph_state["session"]
+        message = graph_state["message"]
+        intent = await self._detect_intent(message, session)
+        logger.info("assistant_intent_detected", extra={"session_id": session.session_id, "intent": intent})
+        return {"intent": intent}
+
+    async def _create_schedule_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        request = graph_state["request"]
+        response = await self._create_schedule(graph_state["session"], graph_state["message"], request.timezone)
+        return {"response": response}
+
+    async def _modify_schedule_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        request = graph_state["request"]
+        response = await self._modify_schedule(
+            graph_state["session"],
+            graph_state["message"],
+            graph_state["intent"],
+            request.timezone,
+        )
+        return {"response": response}
+
+    async def _answer_question_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        return {"response": self._answer_question(graph_state["session"], graph_state["message"])}
+
+    async def _sync_calendar_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        session = graph_state["session"]
+        response = self._simple_response(
+            session,
+            "sync_calendar",
+            "I can sync the current timeline once Google Calendar is connected. Use the calendar button on the right to connect or sync.",
+            ["Connect Google Calendar", "Sync to Calendar"],
+        )
+        return {"response": response}
+
+    async def _persist_memory_node(self, graph_state: AssistantGraphState) -> AssistantGraphState:
+        session = graph_state["session"]
+        response = graph_state["response"]
+        session.turns.append(ConversationTurn(role="assistant", content=response.assistant_message))
+        self.memory.append_turn(session.session_id, "assistant", response.assistant_message)
+        self.memory.save_session(
+            session.session_id,
+            session.latest_plan_text,
+            session.latest_schedule,
+            session.user_preferences,
+        )
+        return {}
+
+    def _route_intent(self, graph_state: AssistantGraphState) -> str:
+        intent = graph_state["intent"]
+        if intent == "create_schedule":
+            return "create_schedule"
+        if intent == "sync_calendar":
+            return "sync_calendar"
+        if intent in {"modify_schedule", "add_task", "remove_task", "optimize_schedule"}:
+            return "modify_schedule"
+        return "answer_question"
+
+    async def _detect_intent(self, message: str, state: AssistantSessionState) -> AssistantIntent:
+        if self.settings.openai_api_key:
+            try:
+                return await self._detect_intent_with_openai(message, state)
+            except Exception as exc:
+                logger.warning("assistant_intent_llm_failed", extra={"error": str(exc)})
+        return self._detect_intent_with_rules(message, state)
+
+    async def _detect_intent_with_openai(self, message: str, state: AssistantSessionState) -> AssistantIntent:
+        client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+        response = await client.chat.completions.create(
+            model=self.settings.openai_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Classify the user's scheduling assistant intent. "
+                        "Return JSON only. Valid intents are create_schedule, ask_question, "
+                        "modify_schedule, add_task, remove_task, optimize_schedule, sync_calendar."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Has active schedule: {state.latest_schedule is not None}\n"
+                        f"Recent turns: {[turn.content for turn in state.turns[-6:]]}\n"
+                        f"Message: {message}\n"
+                        'Return shape: {"intent":"create_schedule"}'
+                    ),
+                },
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        data = json.loads(response.choices[0].message.content or "{}")
+        intent = data.get("intent")
+        valid: set[AssistantIntent] = {
+            "create_schedule",
+            "ask_question",
+            "modify_schedule",
+            "add_task",
+            "remove_task",
+            "optimize_schedule",
+            "sync_calendar",
+        }
+        if intent in valid:
+            return intent
+        return self._detect_intent_with_rules(message, state)
+
+    def _detect_intent_with_rules(self, message: str, state: AssistantSessionState) -> AssistantIntent:
         lower = message.lower()
         if any(phrase in lower for phrase in ("sync", "calendar")):
             return "sync_calendar"

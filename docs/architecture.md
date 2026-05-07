@@ -7,8 +7,10 @@
 ```text
 React Chatbot Assistant
   -> FastAPI Backend
+  -> LangGraph Assistant Orchestrator
   -> Intent Detection
-  -> Conversation Memory
+  -> Backend Tool Nodes
+  -> SQLite Conversation Memory
   -> LLM Structured Extraction Layer
   -> Task Validation Layer
   -> Scheduling and Optimization Engine
@@ -23,7 +25,8 @@ React Chatbot Assistant
 - `task_validation_service.py`: checks missing durations, invalid dates, overlaps, and impossible windows.
 - `scheduling_engine.py`: locks fixed tasks, finds open slots, schedules flexible work, and emits suggestions.
 - `workflow_orchestrator.py`: coordinates extraction, validation, scheduling, persistence, and calendar sync.
-- `assistant_service.py`: stores active-session memory, detects user intent, answers follow-up questions, and routes schedule changes.
+- `assistant_service.py`: uses LangGraph to load memory, classify intent, call scheduling/question/modification/sync tool nodes, and persist the response.
+- `conversation_memory_service.py`: stores chat turns, latest plan text, latest schedule JSON, and user preferences in SQLite for the MVP.
 - `calendar_sync_service.py`: handles Google OAuth URLs, token exchange, and event creation for scheduled tasks.
 
 ## Why LLM + Algorithm
@@ -39,6 +42,17 @@ This makes the system safer and easier to explain:
 ## Conversation Flow
 
 The assistant stores the latest schedule, extracted tasks, timeline, conflicts, warnings, free-time context, and preferences for the active session. Follow-up questions use this context instead of generating a new schedule every time.
+
+LangGraph runs the assistant as a small tool graph:
+
+```text
+load_memory
+  -> classify_intent
+  -> create_schedule | answer_question | modify_schedule | sync_calendar
+  -> persist_memory
+```
+
+The LLM can classify intent and extract tasks, but it does not directly mutate the calendar. The graph routes to backend tools that validate, schedule, update memory, and return typed responses.
 
 Supported intents:
 

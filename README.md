@@ -10,10 +10,11 @@ This is intentionally more than a calendar chatbot: the LLM does structured extr
 
 ```text
 User chats with AI
+  -> LangGraph routes intent and tool actions
   -> LLM extracts structured tasks
   -> Backend validates and normalizes tasks
   -> Scheduling engine creates schedule
-  -> Conversation memory stores schedule context
+  -> SQLite conversation memory stores schedule context
   -> User reviews timeline and suggestions
   -> User approves
   -> Calendar sync
@@ -66,7 +67,9 @@ Screenshots are stored in `docs/screenshots/`.
 - Friendly AI scheduling summary after generation.
 - Calendar preview with timeline, task counts, buffers, and issue counts.
 - Approval workflow with Approve Schedule, Regenerate, and Sync to Calendar actions.
-- Conversation memory for the active session.
+- LangGraph assistant orchestration with tool-based actions.
+- SQLite conversation memory for chat history, latest schedule, conflicts, warnings, and preferences.
+- OpenAI-powered intent detection with deterministic fallback routing.
 - Follow-up questions like `Do I have free time before bed?` or `What tasks are pending?`.
 - Schedule modification requests like `Move gym to evening` or `Add dinner at 8pm`.
 - OpenAI-powered structured task extraction through `OPENAI_API_KEY`.
@@ -87,17 +90,21 @@ Screenshots are stored in `docs/screenshots/`.
 ```text
 React Chatbot Assistant
   -> FastAPI Backend
+  -> LangGraph Assistant Orchestrator
+  -> Intent Classifier
+  -> Backend Tools
   -> LLM Structured Extraction Layer
   -> Task Validation Layer
   -> Scheduling and Optimization Engine
-  -> Conversation Memory
+  -> SQLite Conversation Memory
   -> Workflow Orchestration Layer
   -> Google Calendar OAuth + Event Sync
 ```
 
 The key design decision is separation of concerns:
 
-- LLM: extracts intent into structured task candidates.
+- LLM: extracts intent and task candidates from conversation.
+- LangGraph: routes messages to schedule, question-answering, modification, and sync tools.
 - Validator: treats extracted data as untrusted and checks it.
 - Scheduler: deterministically allocates time blocks and detects conflicts.
 - Orchestrator: manages lifecycle, persistence, and calendar sync boundaries.
